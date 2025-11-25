@@ -39,8 +39,7 @@ def save_message():
  
     data = request.get_json() 
 11 
- 
-Продолжение листинга 1 
+
     message = data.get("message", "") if data else "" 
  
     with conn.cursor() as cur: 
