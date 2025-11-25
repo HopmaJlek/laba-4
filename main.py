@@ -37,10 +37,9 @@ def save_message():
     if not conn: 
         return jsonify({"error": "Database not connected"}), 500 
  
-    data = request.get_json() 
-11 
-
-    message = data.get("message", "") if data else "" 
+    data = request.get_json()  
+    message = data.get("message", "") 
+    if data else "" 
  
     with conn.cursor() as cur: 
         cur.execute(""" 
