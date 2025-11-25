@@ -1,75 +1,96 @@
-from flask import Flask, request, jsonify
-import psycopg
-from psycopg import sql
-import os
-from urllib.parse import urlparse
+from flask import Flask, request, jsonify 
+import psycopg2 
+import os 
+from urllib.parse import urlparse 
+ 
+ 
+app = Flask(__name__) 
+ 
+DATABASE_URL = os.environ.get("DB_URL") 
+ 
+if DATABASE_URL: 
+    url = urlparse(DATABASE_URL) 
+    conn = psycopg2.connect( 
+        database=url.path[1:], 
+        user=url.username, 
+        password=url.password, 
+        host=url.hostname, 
+        port=url.port 
+    ) 
+else: 
+    conn = None 
+ 
+if conn: 
+    with conn.cursor() as cur: 
+        cur.execute(""" 
+            create table if not exists messages( 
+                id serial primary key, 
+                content text not null, 
+                created_at timestamp default now() 
+            ) 
+        """) 
+        conn.commit() 
+ 
+ 
+@app.route("/save", methods=["POST"]) 
+def save_message(): 
+    if not conn: 
+        return jsonify({"error": "Database not connected"}), 500 
+ 
+    data = request.get_json() 
+11 
+ 
+Продолжение листинга 1 
+    message = data.get("message", "") if data else "" 
+ 
+    with conn.cursor() as cur: 
+        cur.execute(""" 
+            insert into messages(content) values (%s) 
+        """, (message,)) 
+        conn.commit() 
+ 
+    return jsonify({ 
+        "status": "saved", 
+        "message": message 
+    }) 
+ 
+ 
+@app.route("/messages", methods=["GET"]) 
+def get_messages(): 
+    if not conn: 
+        return jsonify({"error": "Database not connected"}), 500 
+ 
+    with conn.cursor() as cur: 
+        cur.execute(""" 
+            select 
+                id, 
+                content, 
+                created_at 
+            from messages 
+            order by id desc limit 10 
+        """) 
+        db_response_rows = cur.fetchall() 
+ 
+    messages = [{ 
+        "id": row[0], 
+        "text": row[1], 
+        "time": row[2].isoformat() 
+    } for row in db_response_rows] 
+ 
+    return jsonify(messages) 
+ 
+ 
+@app.route("/", methods=["GET"]) 
+def hello(): 
+    return "Hello, Serverless!        \n", 200, {"Content-Type": "text/plain"} 
 
-app = Flask(__name__)
-
-# Подключаемся к БД один раз при старте приложения
-DATABASE_URL = os.environ.get('DATABASE_URL')
-
-if DATABASE_URL:
-    # psycopg3 сам умеет парсить DATABASE_URL!
-    conn = psycopg.connect(DATABASE_URL, sslmode="require")
-    
-    # Создаём таблицу при старте (один раз)
-    with conn.cursor() as cur:
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id SERIAL PRIMARY KEY,
-                content TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-    print("Подключились к БД и создали таблицу")
-else:
-    conn = None
-    print("Переменная DATABASE_URL не найдена — работаем без БД")
-
-
-@app.route('/save', methods=['POST'])
-def save_message():
-    if not conn:
-        return jsonify({"error": "DB not connected"}), 500
-    
-    data = request.get_json()
-    message = data.get('message', '') if data else ''
-    
-    with conn.cursor() as cur:
-        cur.execute("INSERT INTO messages (content) VALUES (%s) RETURNING id", (message,))
-        new_id = cur.fetchone()[0]
-        conn.commit()
-    
-    return jsonify({"status": "saved", "id": new_id, "message": message})
-
-
-@app.route('/messages')
-def get_messages():
-    if not conn:
-        return jsonify({"error": "DB not connected"}), 500
-    
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT id, content, created_at 
-            FROM messages 
-            ORDER BY id DESC 
-            LIMIT 10
-        """)
-        rows = cur.fetchall()
-    
-    messages = [
-        {"id": row[0], "text": row[1], "time": row[2].isoformat()}
-        for row in rows
-    ]
-    return jsonify(messages)
-
-
-@app.route('/')
-def hello():
-    return "Server is running! POST /save и GET /messages работают!"
-
-
-# Render требует именно так (без if __name__ == '__main__')
-# app.run() не нужен и даже вреден
+@app.route("/echo", methods=["POST"]) 
+def echo(): 
+data = request.get_json() 
+return jsonify({ 
+"status": "received", 
+"you_data": data, 
+"length": len(str(data)) if data else 0 
+}) 
+if __name__ == "__main__": 
+app.run(host="0.0.0.0", port=5000) 
